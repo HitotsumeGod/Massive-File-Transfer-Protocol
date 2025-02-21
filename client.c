@@ -12,29 +12,78 @@
 #include <signal.h>
 
 #define MAXLEN 100
-#define HOST "192.168.0.146"
+#define HOST "100.115.92.203"
 #define PORT "4444"
 
-int main(void) {
+char *getData(FILE *fptr, char *fname, char *buffer, size_t *fsize);
 
+int main(int argc, char *argv[]) {
+
+	FILE *srcf;
 	int sock, errcode;
-	size_t got;
+	size_t got, fdata;
+	uint32_t expor;
 	struct addrinfo sai, *spai;
-	char buffer[MAXLEN];
+	char *fbuf;
+	fbuf = getData(srcf, argv[1], fbuf, &fdata);
+	expor = htonl((uint32_t) fdata);
 	memset(&sai, 0, sizeof(sai));
 	sai.ai_family = AF_INET;
 	sai.ai_socktype = SOCK_STREAM;
-	if ((errcode = getaddrinfo(HOST, PORT, &sai, &spai)) != 0)
+	if ((errcode = getaddrinfo(HOST, PORT, &sai, &spai)) != 0) {
 		fprintf(stderr, "%s\n", gai_strerror(errcode));
-	if ((sock = socket(spai -> ai_family, spai -> ai_socktype, spai -> ai_protocol)) == -1)
+		exit(1);
+	}
+	if ((sock = socket(spai -> ai_family, spai -> ai_socktype, spai -> ai_protocol)) == -1) {
 		perror("sock err");
-	if (connect(sock, spai -> ai_addr, spai -> ai_addrlen) == -1)
+		exit(1);
+	}
+	if (connect(sock, spai -> ai_addr, spai -> ai_addrlen) == -1) {
 		perror("con err");
-	if ((got = recv(sock, buffer, sizeof(buffer) - 1, 0)) == -1)
+		exit(1);
+	}
+	//export fbuf size to allow server to properly allocate memory
+	if (send(sock, &expor, sizeof(expor), 0) == -1) {
 		perror("send err");
-	buffer[MAXLEN] = '\0';
-	printf("%s%zu%s\n", "Received ", got, " bytes.");
-	printf("%s\n", buffer);
+		exit(1);
+	}
+	if ((got = send(sock, fbuf, fdata, 0)) == -1) {
+		perror("send err");
+		exit(1);
+	}
+	printf("%s%zu%s\n", "Sent ", got, " bytes.");
+	free(fbuf);
 	return 0;
+
+}
+
+char *getData(FILE *srcfile, char *fname, char *buf, size_t *fsize) {
+
+	if ((srcfile = fopen(fname, "rb")) == NULL) {
+		perror("fopen err");
+		exit(1);
+	}
+	if (fseek(srcfile, 0L, SEEK_END) == -1) {
+		perror("fseek err");
+		exit(1);
+	}
+	if ((*fsize = ftell(srcfile)) == -1) {
+		perror("ftell err");
+		exit(1);
+	}
+	if (fseek(srcfile, 0L, SEEK_SET) == -1) {
+		perror("rewind err");
+		exit(1);
+	}
+	buf = malloc(*fsize);
+	if (fread(buf, sizeof(char), *fsize, srcfile) < 0)
+		if (ferror(srcfile)) {
+			perror("ferror");
+			exit(1);
+		} else { 
+			perror("eof");
+			exit(1);
+		}
+	return buf;
 
 }
