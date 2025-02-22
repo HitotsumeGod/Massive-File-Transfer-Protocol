@@ -12,7 +12,6 @@
 #include <signal.h>
 
 #define MAXLEN 100
-#define HOST "100.115.92.203"
 #define PORT "4444"
 
 char *getData(FILE *fptr, char *fname, char *buffer, size_t *fsize);
@@ -25,12 +24,12 @@ int main(int argc, char *argv[]) {
 	uint32_t expor;
 	struct addrinfo sai, *spai;
 	char *fbuf;
-	fbuf = getData(srcf, argv[1], fbuf, &fdata);
+	fbuf = getData(srcf, argv[2], fbuf, &fdata);
 	expor = htonl((uint32_t) fdata);
 	memset(&sai, 0, sizeof(sai));
 	sai.ai_family = AF_INET;
 	sai.ai_socktype = SOCK_STREAM;
-	if ((errcode = getaddrinfo(HOST, PORT, &sai, &spai)) != 0) {
+	if ((errcode = getaddrinfo(argv[1], PORT, &sai, &spai)) != 0) {
 		fprintf(stderr, "%s\n", gai_strerror(errcode));
 		exit(1);
 	}

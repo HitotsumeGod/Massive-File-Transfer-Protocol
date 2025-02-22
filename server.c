@@ -22,7 +22,6 @@ int main(void) {
 
 	FILE *srcf;
 	int serv_sock, cli_sock, errcode;
-	char *buffer;
 	struct addrinfo sai, *spai;
 	struct sockaddr_storage ss;
 	size_t b_read, fin;
@@ -46,8 +45,8 @@ int main(void) {
 	if (recv(cli_sock, &got, sizeof(got), 0) == -1)
 		perror("recv err");
 	fin = (size_t) ntohl(got);
-	printf("%zu\n", fin);
-	if (recv(cli_sock, &buffer, fin, 0) == -1)
+	char *buffer = malloc(fin);
+	if (recv(cli_sock, buffer, fin, 0) == -1)
 		perror("recv erri");
 	b_read = writeData(srcf, "outputf", buffer, fin);
 	printf("%s%zu%s\n", "Read ", b_read, " bytes.");
@@ -56,6 +55,7 @@ int main(void) {
 		perror("close err");
 	if (close(serv_sock) == -1)
 		perror("close err");
+	free(buffer);
 	return 0;
 
 }
@@ -65,7 +65,7 @@ size_t writeData(FILE *srcfile, char *fname, char *buffer, size_t bw) {
 	size_t b_read;
 	if ((srcfile = fopen(fname, "wb")) == NULL)
 		perror("fopen err");
-	if ((b_read = fwrite(&buffer, sizeof(char), bw, srcfile)) < 0)
+	if ((b_read = fwrite(buffer, sizeof(char), bw, srcfile)) < 0)
 		perror("fwrite err");
 	if (fclose(srcfile) == -1)
 		perror("fclose err");
