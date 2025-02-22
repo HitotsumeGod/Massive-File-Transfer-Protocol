@@ -9,23 +9,26 @@
 #include <netdb.h>
 #include <arpa/inet.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 #include <signal.h>
 
 #define MAXLEN 100
 #define PORT "4444"
 
-char *getData(FILE *fptr, char *fname, char *buffer, size_t *fsize);
+size_t writeData(FILE *srcfile, char *fname, char *buffer, size_t bw);
 
 int main(int argc, char *argv[]) {
 
 	FILE *srcf;
-	int sock, errcode;
-	size_t got, fdata;
-	uint32_t expor;
+	char *fbuf, *fname;
+	int sock, errcode, n;
+	size_t b_read, b_sent, n_size, fin, temp;
+	uint32_t expor, got;
 	struct addrinfo sai, *spai;
-	char *fbuf;
-	fbuf = getData(srcf, argv[2], fbuf, &fdata);
-	expor = htonl((uint32_t) fdata);
+	if (argc != 2) {
+		printf("%s\n", "Improper format. To run, use './client <host IP>'.");
+		exit (1);
+	}
 	memset(&sai, 0, sizeof(sai));
 	sai.ai_family = AF_INET;
 	sai.ai_socktype = SOCK_STREAM;
@@ -41,48 +44,57 @@ int main(int argc, char *argv[]) {
 		perror("con err");
 		exit(1);
 	}
-	//export fbuf size to allow server to properly allocate memory
-	if (send(sock, &expor, sizeof(expor), 0) == -1) {
+	n = 0;
+	while (n < 5) {
+	fname = NULL;
+	if (getline(&fname, &temp, stdin) == -1) {
+		perror("getline err");
+		exit(1);
+	}
+	if (strcmp(fname, "exit\n") == 0)
+		exit(1);
+	n_size = strlen(fname) - 1;
+	expor = htonl((uint32_t) n_size);
+	if ((b_sent = send(sock, &expor, sizeof(expor), 0)) == -1) {
 		perror("send err");
 		exit(1);
 	}
-	if ((got = send(sock, fbuf, fdata, 0)) == -1) {
+	if ((b_sent = send(sock, fname, n_size, 0)) == -1) {
 		perror("send err");
 		exit(1);
 	}
-	printf("%s%zu%s\n", "Sent ", got, " bytes.");
+	if ((b_read = recv(sock, &got, sizeof(got), 0)) == -1) {
+		perror("recv err");
+		exit(1);
+	}
+	fin = (size_t) ntohl(got);
+	fbuf = malloc(fin);
+	if (recv(sock, fbuf, fin, 0) == -1) {
+		perror("recv erri");
+		exit(1);
+	}
+	printf("%s%zu%s\n", "Client read ", fin, " bytes.");
+	b_read = writeData(srcf, "outputf", fbuf, fin);
+	free(fname);
 	free(fbuf);
+	n++;
+	}
+	freeaddrinfo(spai);
 	return 0;
 
 }
 
-char *getData(FILE *srcfile, char *fname, char *buf, size_t *fsize) {
+size_t writeData(FILE *srcfile, char *fname, char *buffer, size_t bw) {
 
-	if ((srcfile = fopen(fname, "rb")) == NULL) {
+	size_t b_read;
+	if ((srcfile = fopen(fname, "wb")) == NULL)
 		perror("fopen err");
-		exit(1);
-	}
-	if (fseek(srcfile, 0L, SEEK_END) == -1) {
-		perror("fseek err");
-		exit(1);
-	}
-	if ((*fsize = ftell(srcfile)) == -1) {
-		perror("ftell err");
-		exit(1);
-	}
-	if (fseek(srcfile, 0L, SEEK_SET) == -1) {
-		perror("rewind err");
-		exit(1);
-	}
-	buf = malloc(*fsize);
-	if (fread(buf, sizeof(char), *fsize, srcfile) < 0)
-		if (ferror(srcfile)) {
-			perror("ferror");
-			exit(1);
-		} else { 
-			perror("eof");
-			exit(1);
-		}
-	return buf;
+	if ((b_read = fwrite(buffer, sizeof(char), bw, srcfile)) < 0)
+		perror("fwrite err");
+	if (fclose(srcfile) == -1)
+		perror("fclose err");
+	if (chmod(fname, 0770) == -1)
+		perror("chmod err");
+	return b_read;
 
 }
