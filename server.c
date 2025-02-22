@@ -16,61 +16,113 @@
 #define MAXLEN 1000
 #define FLEN 1000000
 
-size_t writeData(FILE *fptr, char *fname, char *buffer, size_t num_bytes);
+//getdata uses a three step process to prepare a buffer to transport file data: (1) obtain file size in bytes using fseek + ftell, (2) allocate memory equal to size determined in (1) to passed buffer, (3) read target file byte by byte into the buffer. Finally, the prepared buffer is returned.
+
+char *getData(FILE *fptr, char *fname, char *buffer, size_t *fsize);
 
 int main(void) {
 
 	FILE *srcf;
-	int serv_sock, cli_sock, errcode;
+	int serv_sock, cli_sock, errcode, n;
 	struct addrinfo sai, *spai;
 	struct sockaddr_storage ss;
-	size_t b_read, fin;
-	uint32_t got;
+	char c, *fbuf, *fname;
+	size_t b_sent, b_read, n_size, fdata_len;
+	uint32_t got, expor;
 	socklen_t ss_size;
 	ss_size = sizeof(ss);
 	memset(&sai, 0, sizeof(sai));
 	sai.ai_family = AF_INET;
 	sai.ai_socktype = SOCK_STREAM;
 	sai.ai_flags = AI_PASSIVE;
-	if ((errcode = getaddrinfo(NULL, PORT, &sai, &spai)) != 0)
+	if ((errcode = getaddrinfo(NULL, PORT, &sai, &spai)) != 0) {
 		fprintf(stderr, "%s\n", gai_strerror(errcode));
-	if ((serv_sock = socket(spai -> ai_family, spai -> ai_socktype, spai -> ai_protocol)) == -1)
+		exit (1);
+	}
+	if ((serv_sock = socket(spai -> ai_family, spai -> ai_socktype, spai -> ai_protocol)) == -1) {
 		perror("sock err");	
-	if (bind(serv_sock, spai -> ai_addr, spai -> ai_addrlen) == -1)
+		exit(1);
+	}
+	if (bind(serv_sock, spai -> ai_addr, spai -> ai_addrlen) == -1) {
 		perror("bind err");
-	if (listen(serv_sock, 1) == -1)
+		exit(1);
+	}
+	if (listen(serv_sock, 1) == -1) {
 		perror("listen err");
-	if ((cli_sock = accept(serv_sock, (struct sockaddr *) &ss, &ss_size)) == -1)
+		exit(1);
+	}
+	if ((cli_sock = accept(serv_sock, (struct sockaddr *) &ss, &ss_size)) == -1) {
 		perror("accept err");
-	if (recv(cli_sock, &got, sizeof(got), 0) == -1)
+		exit(1);
+	}
+	n = 0;
+	while (n < 5) {
+	if ((b_read = recv(cli_sock, &got, sizeof(got), 0)) == -1) {
 		perror("recv err");
-	fin = (size_t) ntohl(got);
-	char *buffer = malloc(fin);
-	if (recv(cli_sock, buffer, fin, 0) == -1)
-		perror("recv erri");
-	b_read = writeData(srcf, "outputf", buffer, fin);
-	printf("%s%zu%s\n", "Read ", b_read, " bytes.");
+		exit(1);
+	}
+	n_size = (size_t) ntohl(got);
+	fname = malloc(n_size);
+	if ((b_read = recv(cli_sock, fname, n_size, 0)) == -1) {
+		perror("recv err");
+		exit(1);
+	}
+	fbuf = getData(srcf, fname, fbuf, &fdata_len);
+	expor = htonl((uint32_t) fdata_len);
+	//export fbuf size to allow server to properly allocate memory
+	if (send(cli_sock, &expor, sizeof(expor), 0) == -1) {
+		perror("send err");
+		exit(1);
+	}
+	if ((b_sent = send(cli_sock, fbuf, fdata_len, 0)) == -1) {
+		perror("send err");
+		exit(1);
+	}
+	printf("%s%zu%s\n", "Server sent ", b_sent, " bytes.");
+	free(fbuf);
+	free(fname);
+	n++;
+	}
 	freeaddrinfo(spai);
-	if (close(cli_sock) == -1)
+	if (close(cli_sock) == -1) {
 		perror("close err");
-	if (close(serv_sock) == -1)
+		exit(1);
+	}
+	if (close(serv_sock) == -1) {
 		perror("close err");
-	free(buffer);
+		exit(1);
+	}
 	return 0;
 
 }
 
-size_t writeData(FILE *srcfile, char *fname, char *buffer, size_t bw) {
+char *getData(FILE *srcfile, char *fname, char *buf, size_t *fsize) {
 
-	size_t b_read;
-	if ((srcfile = fopen(fname, "wb")) == NULL)
+	if ((srcfile = fopen(fname, "rb")) == NULL) {
 		perror("fopen err");
-	if ((b_read = fwrite(buffer, sizeof(char), bw, srcfile)) < 0)
-		perror("fwrite err");
-	if (fclose(srcfile) == -1)
-		perror("fclose err");
-	if (chmod(fname, 0770) == -1)
-		perror("chmod err");
-	return b_read;
+		exit(1);
+	}
+	if (fseek(srcfile, 0L, SEEK_END) == -1) {
+		perror("fseek err");
+		exit(1);
+	}
+	if ((*fsize = ftell(srcfile)) == -1) {
+		perror("ftell err");
+		exit(1);
+	}
+	if (fseek(srcfile, 0L, SEEK_SET) == -1) {
+		perror("rewind err");
+		exit(1);
+	}
+	buf = malloc(*fsize);
+	if (fread(buf, sizeof(char), *fsize, srcfile) < 0)
+		if (ferror(srcfile)) {
+			perror("ferror");
+			exit(1);
+		} else { 
+			perror("eof");
+			exit(1);
+		}
+	return buf;
 
 }
