@@ -21,7 +21,7 @@ int main(int argc, char *argv[]) {
 
 	FILE *srcf;
 	char *fbuf, *fname;
-	int sock, errcode, n;
+	int sock, errcode;
 	size_t b_read, b_sent, n_size, fin, temp;
 	uint32_t expor, got;
 	struct addrinfo sai, *spai;
@@ -44,8 +44,7 @@ int main(int argc, char *argv[]) {
 		perror("con err");
 		exit(1);
 	}
-	n = 0;
-	while (n < 5) {
+	while (1) {
 	fname = NULL;
 	if (getline(&fname, &temp, stdin) == -1) {
 		perror("getline err");

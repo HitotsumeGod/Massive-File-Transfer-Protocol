@@ -23,7 +23,7 @@ char *getData(FILE *fptr, char *fname, char *buffer, size_t *fsize);
 int main(void) {
 
 	FILE *srcf;
-	int serv_sock, cli_sock, errcode, n;
+	int serv_sock, cli_sock, errcode;
 	struct addrinfo sai, *spai;
 	struct sockaddr_storage ss;
 	char c, *fbuf, *fname;
@@ -55,8 +55,7 @@ int main(void) {
 		perror("accept err");
 		exit(1);
 	}
-	n = 0;
-	while (n < 5) {
+	while (1) {
 	if ((b_read = recv(cli_sock, &got, sizeof(got), 0)) == -1) {
 		perror("recv err");
 		exit(1);
